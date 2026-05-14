@@ -58,6 +58,23 @@ if ($PyInstallerExitCode -ne 0) {
   exit 1
 }
 
+try {
+  & $Python -c "import pymupdf, fitz; print('PyMuPDF import ok')"
+  $PyMuPDFExitCode = $LASTEXITCODE
+} catch {
+  $PyMuPDFExitCode = 1
+}
+
+if ($PyMuPDFExitCode -ne 0) {
+  Write-Host ""
+  Write-Host "PyMuPDF is not installed for this Python environment."
+  Write-Host "Install dependencies in the same venv used for building:"
+  Write-Host "  .\.venv\Scripts\Activate.ps1"
+  Write-Host "  python -m pip install -r requirements.txt"
+  Write-Host "  python -m pip install -e ."
+  exit 1
+}
+
 & $Python -m PyInstaller `
   --name "PDF to JPG Converter" `
   --windowed `
@@ -65,6 +82,10 @@ if ($PyInstallerExitCode -ne 0) {
   --clean `
   --noconfirm `
   --paths "$SourceDir" `
+  --collect-all "pymupdf" `
+  --collect-all "fitz" `
+  --hidden-import "pymupdf" `
+  --hidden-import "fitz" `
   --hidden-import "pdf_to_jpg_app.gui" `
   --hidden-import "pdf_to_jpg_app.converter" `
   "$Launcher"

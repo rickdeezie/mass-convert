@@ -89,10 +89,10 @@ not `python -m Pyinstaller`.
 
 The main launcher file is `pdf_to_jpg_converter.py`. A `pdf_to_jpg_convertor.py` alias is also included for the alternate spelling, but the build script uses `converter`.
 
-If the built Windows app opens with `No module named 'pdf_to_jpg_app'`, rebuild with the current `scripts\build-windows.ps1`. It passes the `src` folder to PyInstaller explicitly. Manual equivalent:
+If the built Windows app opens with `No module named 'pdf_to_jpg_app'`, `No module named 'pymupdf'`, or `No module named 'fitz'`, rebuild with the current `scripts\build-windows.ps1`. It passes the `src` folder and PyMuPDF collection flags to PyInstaller explicitly. Manual equivalent:
 
 ```powershell
-python -m PyInstaller --name "PDF to JPG Converter" --windowed --onefile --clean --noconfirm --paths .\src --hidden-import pdf_to_jpg_app.gui --hidden-import pdf_to_jpg_app.converter .\pdf_to_jpg_converter.py
+python -m PyInstaller --name "PDF to JPG Converter" --windowed --onefile --clean --noconfirm --paths .\src --collect-all pymupdf --collect-all fitz --hidden-import pymupdf --hidden-import fitz --hidden-import pdf_to_jpg_app.gui --hidden-import pdf_to_jpg_app.converter .\pdf_to_jpg_converter.py
 ```
 
 ## Settings

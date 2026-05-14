@@ -30,6 +30,8 @@ if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   fi
 fi
 
+"$PYTHON_BIN" -c "import pymupdf, fitz; print('PyMuPDF import ok')"
+
 "$PYTHON_BIN" -m PyInstaller \
   --name "PDF to JPG Converter" \
   --windowed \
@@ -37,6 +39,10 @@ fi
   --clean \
   --noconfirm \
   --paths "$SOURCE_DIR" \
+  --collect-all pymupdf \
+  --collect-all fitz \
+  --hidden-import pymupdf \
+  --hidden-import fitz \
   --hidden-import pdf_to_jpg_app.gui \
   --hidden-import pdf_to_jpg_app.converter \
   "$LAUNCHER"
