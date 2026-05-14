@@ -1,7 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
+
 PYTHON_BIN="${PYTHON_BIN:-python}"
+SOURCE_DIR="$PROJECT_ROOT/src"
+LAUNCHER="$PROJECT_ROOT/pdf_to_jpg_converter.py"
+
+if [[ ! -f "$LAUNCHER" ]]; then
+  echo "Could not find pdf_to_jpg_converter.py in $PROJECT_ROOT" >&2
+  exit 1
+fi
+
+if [[ ! -d "$SOURCE_DIR/pdf_to_jpg_app" ]]; then
+  echo "Could not find src/pdf_to_jpg_app in $PROJECT_ROOT" >&2
+  exit 1
+fi
 
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   if [[ -x ".venv/bin/python" ]]; then
@@ -20,6 +36,9 @@ fi
   --onedir \
   --clean \
   --noconfirm \
-  pdf_to_jpg_converter.py
+  --paths "$SOURCE_DIR" \
+  --hidden-import pdf_to_jpg_app.gui \
+  --hidden-import pdf_to_jpg_app.converter \
+  "$LAUNCHER"
 
 echo "Built dist/PDF to JPG Converter.app"

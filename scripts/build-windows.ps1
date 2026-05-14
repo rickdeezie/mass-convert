@@ -4,6 +4,8 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 Set-Location $ProjectRoot
 $Launcher = Join-Path $ProjectRoot "pdf_to_jpg_converter.py"
+$SourceDir = Join-Path $ProjectRoot "src"
+$PackageDir = Join-Path $SourceDir "pdf_to_jpg_app"
 
 if (-not (Test-Path $Launcher)) {
   Write-Host ""
@@ -16,6 +18,16 @@ if (-not (Test-Path $Launcher)) {
   Write-Host "  pyproject.toml"
   Write-Host "  requirements.txt"
   Write-Host "  src\pdf_to_jpg_app\"
+  exit 1
+}
+
+if (-not (Test-Path $PackageDir)) {
+  Write-Host ""
+  Write-Host "Could not find the pdf_to_jpg_app package."
+  Write-Host "This folder should exist:"
+  Write-Host "  $PackageDir"
+  Write-Host ""
+  Write-Host "Make sure you copied the whole project folder, including src\pdf_to_jpg_app\."
   exit 1
 }
 
@@ -52,6 +64,9 @@ if ($PyInstallerExitCode -ne 0) {
   --onefile `
   --clean `
   --noconfirm `
+  --paths "$SourceDir" `
+  --hidden-import "pdf_to_jpg_app.gui" `
+  --hidden-import "pdf_to_jpg_app.converter" `
   "$Launcher"
 
 Write-Host "Built dist\PDF to JPG Converter.exe"

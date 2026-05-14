@@ -1,6 +1,13 @@
+from pathlib import Path
+import sys
+
+
+src_dir = Path(__file__).resolve().parent / "src"
+if src_dir.exists():
+    sys.path.insert(0, str(src_dir))
+
 from pdf_to_jpg_app.gui import main
 
 
 if __name__ == "__main__":
     main()
-
