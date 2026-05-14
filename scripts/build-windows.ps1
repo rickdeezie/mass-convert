@@ -31,10 +31,33 @@ if (-not (Test-Path $PackageDir)) {
   exit 1
 }
 
-$Python = ".\.venv\Scripts\python.exe"
+$Python = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 
 if (-not (Test-Path $Python)) {
-  $Python = "python"
+  Write-Host "Creating Windows virtual environment in .venv..."
+
+  try {
+    & py -3.12 -m venv ".venv"
+    $VenvExitCode = $LASTEXITCODE
+  } catch {
+    $VenvExitCode = 1
+  }
+
+  if ($VenvExitCode -ne 0) {
+    try {
+      & python -m venv ".venv"
+      $VenvExitCode = $LASTEXITCODE
+    } catch {
+      $VenvExitCode = 1
+    }
+  }
+
+  if ($VenvExitCode -ne 0 -or -not (Test-Path $Python)) {
+    Write-Host ""
+    Write-Host "Could not create .venv."
+    Write-Host "Install Python 3.12 for Windows, then run this script again."
+    exit 1
+  }
 }
 
 try {
@@ -45,17 +68,10 @@ try {
 }
 
 if ($PyInstallerExitCode -ne 0) {
-  Write-Host ""
-  Write-Host "PyInstaller is not installed for this Python environment."
-  Write-Host "From the project folder, run:"
-  Write-Host "  py -3.12 -m venv .venv"
-  Write-Host "  .\.venv\Scripts\Activate.ps1"
-  Write-Host "  python -m pip install --upgrade pip"
-  Write-Host "  python -m pip install -r requirements.txt"
-  Write-Host "  python -m pip install -e ."
-  Write-Host ""
-  Write-Host "If running manually, use 'PyInstaller' with a capital I: python -m PyInstaller"
-  exit 1
+  Write-Host "Installing PyInstaller and project dependencies into .venv..."
+  & $Python -m pip install --upgrade pip
+  & $Python -m pip install -r "requirements.txt"
+  & $Python -m pip install -e "."
 }
 
 try {
@@ -66,13 +82,9 @@ try {
 }
 
 if ($PyMuPDFExitCode -ne 0) {
-  Write-Host ""
-  Write-Host "PyMuPDF is not installed for this Python environment."
-  Write-Host "Install dependencies in the same venv used for building:"
-  Write-Host "  .\.venv\Scripts\Activate.ps1"
-  Write-Host "  python -m pip install -r requirements.txt"
-  Write-Host "  python -m pip install -e ."
-  exit 1
+  Write-Host "Installing PyMuPDF into .venv..."
+  & $Python -m pip install -r "requirements.txt"
+  & $Python -m pip install -e "."
 }
 
 & $Python -m PyInstaller `
