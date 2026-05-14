@@ -92,6 +92,7 @@ def convert_pdfs(
     summary = ConversionSummary(pdf_count=len(pdfs))
 
     for pdf_path in pdfs:
+        _emit(progress_callback, pdf_path, 0, 0, None, "file_started", f"Starting {pdf_path.name}")
         result = convert_pdf(pdf_path, output_root, options, progress_callback)
         summary.results.append(result)
         summary.page_count += result.page_count
@@ -117,11 +118,21 @@ def convert_pdf(
             result.page_count = len(document)
             if result.page_count == 0:
                 result.error = "PDF has no pages."
+                _emit(progress_callback, source, 0, 0, None, "error", result.error)
                 return result
 
             for page_index in range(result.page_count):
                 page_number = page_index + 1
                 output_path = output_path_for_page(source, output_dir, result.page_count, page_number)
+                _emit(
+                    progress_callback,
+                    source,
+                    page_number,
+                    result.page_count,
+                    output_path,
+                    "page_started",
+                    f"Rendering page {page_number} of {result.page_count}",
+                )
 
                 if output_path.exists() and not options.overwrite:
                     result.skipped.append(output_path)
@@ -200,4 +211,3 @@ def _dedupe_paths(paths: Iterable[Path]) -> list[Path]:
             unique_paths.append(path)
 
     return unique_paths
-

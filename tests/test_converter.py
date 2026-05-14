@@ -7,7 +7,7 @@ try:
 except ImportError:  # pragma: no cover
     import fitz as pymupdf  # type: ignore[no-redef]
 
-from pdf_to_jpg_app.converter import ConversionOptions, convert_pdfs, discover_pdfs, output_path_for_page
+from pdf_to_jpg_app.converter import ConversionOptions, ProgressEvent, convert_pdfs, discover_pdfs, output_path_for_page
 
 
 def create_pdf(path: Path, page_count: int) -> None:
@@ -39,8 +39,14 @@ def test_convert_single_page_pdf_to_jpg(tmp_path: Path) -> None:
     input_pdf = tmp_path / "single.pdf"
     output_dir = tmp_path / "jpg"
     create_pdf(input_pdf, 1)
+    events: list[ProgressEvent] = []
 
-    summary = convert_pdfs([input_pdf], output_dir, ConversionOptions(dpi=150, jpeg_quality=80))
+    summary = convert_pdfs(
+        [input_pdf],
+        output_dir,
+        ConversionOptions(dpi=150, jpeg_quality=80),
+        progress_callback=events.append,
+    )
 
     output = output_dir / "single.jpg"
     assert summary.pdf_count == 1
@@ -49,6 +55,7 @@ def test_convert_single_page_pdf_to_jpg(tmp_path: Path) -> None:
     assert summary.skipped_count == 0
     assert summary.errors == []
     assert output.exists()
+    assert [event.status for event in events] == ["file_started", "page_started", "converted"]
 
 
 def test_convert_multi_page_pdf_to_numbered_jpgs(tmp_path: Path) -> None:
@@ -84,4 +91,3 @@ def test_validation_rejects_out_of_range_settings() -> None:
 
     with pytest.raises(ValueError):
         ConversionOptions(jpeg_quality=101).validate()
-

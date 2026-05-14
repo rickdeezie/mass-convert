@@ -100,6 +100,7 @@ if ($PyMuPDFExitCode -ne 0) {
   --hidden-import "fitz" `
   --hidden-import "pdf_to_jpg_app.gui" `
   --hidden-import "pdf_to_jpg_app.converter" `
+  --hidden-import "pdf_to_jpg_app.worker" `
   "$Launcher"
 
 Write-Host "Built dist\PDF to JPG Converter.exe"

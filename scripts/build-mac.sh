@@ -45,6 +45,7 @@ fi
   --hidden-import fitz \
   --hidden-import pdf_to_jpg_app.gui \
   --hidden-import pdf_to_jpg_app.converter \
+  --hidden-import pdf_to_jpg_app.worker \
   "$LAUNCHER"
 
 echo "Built dist/PDF to JPG Converter.app"

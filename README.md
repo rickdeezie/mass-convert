@@ -60,13 +60,10 @@ open "dist/PDF to JPG Converter.app"
 Build the Windows executable on Windows, in a Windows VM, or in Windows CI. PyInstaller does not cross-compile a Windows `.exe` from macOS.
 
 ```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install -e .
 .\scripts\build-windows.ps1
 ```
+
+The script creates `.venv` automatically if needed, installs the app dependencies into it, and uses that venv to build the executable.
 
 The executable will be created under `dist\PDF to JPG Converter.exe`.
 
@@ -78,6 +75,14 @@ python -m pip install -r requirements.txt
 python -m pip install -e .
 .\scripts\build-windows.ps1
 ```
+
+If you do not have `.venv` yet, run only:
+
+```powershell
+.\scripts\build-windows.ps1
+```
+
+The script will create `.venv` first.
 
 Python module casing matters when running PyInstaller manually. Use:
 

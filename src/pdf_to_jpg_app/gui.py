@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import multiprocessing as mp
 import queue
-import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from pdf_to_jpg_app.converter import ConversionOptions, ProgressEvent, convert_pdfs, discover_pdfs
+from pdf_to_jpg_app.converter import ConversionOptions, ProgressEvent, discover_pdfs
+from pdf_to_jpg_app.worker import run_conversion_worker
 
 
 class PdfToJpgApp(ttk.Frame):
@@ -14,8 +15,10 @@ class PdfToJpgApp(ttk.Frame):
         super().__init__(master, padding=16)
         self.master = master
         self.input_paths: list[Path] = []
-        self.events: queue.Queue[tuple[str, object]] = queue.Queue()
-        self.worker: threading.Thread | None = None
+        self.process_context = mp.get_context("spawn")
+        self.events: mp.Queue[tuple[str, object]] | None = None
+        self.worker: mp.Process | None = None
+        self.worker_finished_polls = 0
 
         self.output_dir_var = tk.StringVar()
         self.dpi_var = tk.IntVar(value=300)
@@ -23,9 +26,13 @@ class PdfToJpgApp(ttk.Frame):
         self.overwrite_var = tk.BooleanVar(value=False)
         self.status_var = tk.StringVar(value="Select PDFs or a folder to begin.")
         self.count_var = tk.StringVar(value="0 PDFs selected")
+        self.progress_count_var = tk.StringVar(value="")
+        self.total_pdfs = 0
+        self.completed_pdfs = 0
 
         self._build_ui()
         self._configure_window()
+        self.master.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def _configure_window(self) -> None:
         self.master.title("PDF to JPG Converter")
@@ -106,6 +113,9 @@ class PdfToJpgApp(ttk.Frame):
         self.convert_button.grid(row=0, column=1)
 
         ttk.Label(progress, textvariable=self.status_var).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ttk.Label(progress, textvariable=self.progress_count_var).grid(
+            row=2, column=0, columnspan=2, sticky="w", pady=(4, 0)
+        )
 
         log_frame = ttk.Frame(self)
         log_frame.grid(row=4, column=0, sticky="nsew", pady=(12, 0))
@@ -163,15 +173,27 @@ class PdfToJpgApp(ttk.Frame):
             messagebox.showerror("No PDFs found", "No PDF files were found in the selected input.")
             return
 
-        self.progress_bar.configure(maximum=len(pdfs), value=0)
+        self.total_pdfs = len(pdfs)
+        self.completed_pdfs = 0
+        self.progress_bar.configure(maximum=self.total_pdfs, value=0)
         self.convert_button.configure(state="disabled")
-        self.status_var.set(f"Converting {len(pdfs)} PDF files...")
+        self.status_var.set(f"Converting {self.total_pdfs} PDF files...")
+        self.progress_count_var.set(f"0 of {self.total_pdfs} PDFs complete")
         self.clear_log()
+        self.log_message(f"Starting conversion of {self.total_pdfs} PDF file(s).")
+        self.worker_finished_polls = 0
 
-        self.worker = threading.Thread(
-            target=self._run_conversion,
-            args=(list(self.input_paths), Path(output_dir), options),
-            daemon=True,
+        self.events = self.process_context.Queue()
+        self.worker = self.process_context.Process(
+            target=run_conversion_worker,
+            args=(
+                [str(path) for path in self.input_paths],
+                str(Path(output_dir)),
+                options.dpi,
+                options.jpeg_quality,
+                options.overwrite,
+                self.events,
+            ),
         )
         self.worker.start()
         self.after(100, self._process_events)
@@ -214,17 +236,10 @@ class PdfToJpgApp(ttk.Frame):
         options.validate()
         return options
 
-    def _run_conversion(self, input_paths: list[Path], output_dir: Path, options: ConversionOptions) -> None:
-        try:
-            summary = convert_pdfs(input_paths, output_dir, options, self._queue_progress_event)
-            self.events.put(("done", summary))
-        except Exception as exc:  # noqa: BLE001 - report unexpected top-level UI errors
-            self.events.put(("fatal", str(exc)))
-
-    def _queue_progress_event(self, event: ProgressEvent) -> None:
-        self.events.put(("progress", event))
-
     def _process_events(self) -> None:
+        if self.events is None:
+            return
+
         while True:
             try:
                 event_type, payload = self.events.get_nowait()
@@ -242,19 +257,38 @@ class PdfToJpgApp(ttk.Frame):
 
         if self.worker and self.worker.is_alive():
             self.after(100, self._process_events)
+        elif self.worker and self.worker.exitcode not in (0, None):
+            self._handle_fatal(f"Conversion process exited unexpectedly with code {self.worker.exitcode}.")
+        elif self.worker:
+            self.worker_finished_polls += 1
+            if self.worker_finished_polls <= 10:
+                self.after(100, self._process_events)
+            else:
+                self._handle_fatal("Conversion process finished without reporting a result.")
 
     def _handle_progress_event(self, payload: object) -> None:
         event = payload
         if not isinstance(event, ProgressEvent):
             return
 
+        if event.status == "file_started":
+            self.status_var.set(f"Working on {event.source.name}...")
+            self.log_message(event.message)
+            return
+
+        if event.status == "page_started":
+            self.status_var.set(f"{event.source.name}: {event.message}")
+            return
+
         if event.status == "error":
             self.log_message(f"ERROR {event.source.name}: {event.message}")
+            self._mark_pdf_complete()
             return
 
         self.log_message(f"{event.source.name} page {event.page_number}/{event.page_count}: {event.message}")
+        self.status_var.set(f"{event.source.name}: {event.message}")
         if event.page_number == event.page_count:
-            self.progress_bar.step(1)
+            self._mark_pdf_complete()
 
     def _handle_done(self, payload: object) -> None:
         summary = payload
@@ -264,6 +298,10 @@ class PdfToJpgApp(ttk.Frame):
 
         self.convert_button.configure(state="normal")
         self.progress_bar.configure(value=self.progress_bar["maximum"])
+        if self.total_pdfs:
+            self.progress_count_var.set(f"{self.total_pdfs} of {self.total_pdfs} PDFs complete")
+        self.worker = None
+        self.events = None
 
         if errors:
             self.status_var.set(f"Done with {len(errors)} error(s). Created {output_count}, skipped {skipped_count}.")
@@ -274,13 +312,25 @@ class PdfToJpgApp(ttk.Frame):
 
     def _handle_fatal(self, message: str) -> None:
         self.convert_button.configure(state="normal")
+        self.worker = None
+        self.events = None
         self.status_var.set("Conversion failed.")
         self.log_message(f"ERROR {message}")
         messagebox.showerror("Conversion failed", message)
+
+    def _mark_pdf_complete(self) -> None:
+        self.completed_pdfs = min(self.completed_pdfs + 1, self.total_pdfs)
+        self.progress_bar.configure(value=self.completed_pdfs)
+        self.progress_count_var.set(f"{self.completed_pdfs} of {self.total_pdfs} PDFs complete")
+
+    def on_close(self) -> None:
+        if self.worker and self.worker.is_alive():
+            self.worker.terminate()
+            self.worker.join(timeout=2)
+        self.master.destroy()
 
 
 def main() -> None:
     root = tk.Tk()
     PdfToJpgApp(root)
     root.mainloop()
-
